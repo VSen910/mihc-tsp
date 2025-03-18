@@ -15,16 +15,18 @@ long distD(int i,int j,float *x,float*y)
 }
 
 long nn_init(int *route, long cities, float *posx, float *posy) {
-	route[0] = 0;
+	// srand(time(NULL));
+	int city = 0;
+	route[0] = city;
 	int *visited = (int*) calloc(cities, sizeof(int));
-	visited[0] = 1;
+	visited[city] = 1;
 	long dist = 0;
 
 	for(int i=1; i<cities; i++) {
 		int prevCity = route[i-1];
 		int nextCity;
 
-		long minDist = LONG_MAX;
+		long minDist = INT_MAX;
 		for(int currCity=0; currCity<cities; currCity++) {
 			long currDist = distD(prevCity, currCity, posx, posy);
 			if(minDist > currDist && !visited[currCity]) {
@@ -49,7 +51,7 @@ typedef struct {
 } MinDistInfo;
 
 #pragma omp declare reduction(minimum : MinDistInfo : \
-	(omp_out = (omp_in.minDist < omp_out.minDist) ? omp_in : omp_out)) \
+	(omp_out = (omp_in.minDist < omp_out.minDist || (omp_in.minDist == omp_out.minDist && omp_in.nextCity < omp_out.nextCity)) ? omp_in : omp_out)) \
 	initializer(omp_priv = {LONG_MAX, -1})
 
 long nn_init_parallel1(int *route, long cities, float *posx, float *posy) {
@@ -115,7 +117,7 @@ long nn_init_parallel(int *route, long cities, float *posx, float *posy) {
 
             #pragma omp critical
             {
-                if (localMinDist < minDist) {
+                if (localMinDist < minDist || (localMinDist == minDist && localNextCity < nextCity)) {
                     minDist = localMinDist;
                     nextCity = localNextCity;
                 }
@@ -185,8 +187,9 @@ int main(int argc, char *argv[]) {
 	char str[256];  
 	int *r;
   int *r_p;
-	long dst,sol,d,cities,no_pairs,tid=0;
-	int intl,count;
+	long sol,d,cities,no_pairs,tid=0;
+	long dst;
+	long intl,count = 0;
 	
 	clock_t start,end,start1,end1;
 
@@ -239,29 +242,29 @@ int main(int argc, char *argv[]) {
 
   dtime = omp_get_wtime() - dtime;
 
-	printf("\nSequential");
-	printf("\nRoute:");
-	for(int i=0; i<cities; i++) {
-		printf("%d->", r[i]);
-	}
-	printf("%d", r[0]);
+	// printf("\nSequential");
+	// printf("\nRoute:");
+	// for(int i=0; i<cities; i++) {
+	// 	printf("%d->", r[i]);
+	// }
+	// printf("%d", r[0]);
 	printf("\ninitial cost : %ld time : %f\n",dst,dtime);
 
-  dtime = omp_get_wtime();
+  // dtime = omp_get_wtime();
 
-	dst = nn_init_parallel1(r_p,cities,posx,posy);
-	routeChecker(cities, r_p);
-	setCoord(r_p,posx,posy,px,py,cities);
+	// dst = nn_init_parallel1(r_p,cities,posx,posy);
+	// routeChecker(cities, r_p);
+	// setCoord(r_p,posx,posy,px,py,cities);
 
-  dtime = omp_get_wtime() - dtime;
+  // dtime = omp_get_wtime() - dtime;
 
-	printf("\nParallel");
-	printf("\nRoute:");
-	for(int i=0; i<cities; i++) {
-		printf("%d->", r_p[i]);
-	}
-	printf("%d", r_p[0]);
-	printf("\ninitial cost : %ld time : %f\n",dst,dtime);
+	// printf("\nParallel");
+	// printf("\nRoute:");
+	// for(int i=0; i<cities; i++) {
+	// 	printf("%d->", r_p[i]);
+	// }
+	// printf("%d", r_p[0]);
+	// printf("\ninitial cost : %ld time : %f\n",dst,dtime);
 
   // isSame(r, r_p, cities);
 
@@ -314,15 +317,15 @@ int main(int argc, char *argv[]) {
 	dtime = omp_get_wtime();
 
 	long currDist = dst;
-	int x = 0, y = 0;
+	int x, y;
 	
 	do {
 		dst = currDist;
 
 		#pragma omp parallel
 		{
-			int x_local = 0;
-			int y_local = 0;
+			int x_local;
+			int y_local;
 			long currDist_local = dst;
 
 			#pragma omp for
@@ -344,7 +347,7 @@ int main(int argc, char *argv[]) {
 
 			#pragma omp critical
 			{
-				if(currDist_local < currDist) {
+				if(currDist_local < currDist || (currDist_local == currDist && x_local < x) || (currDist_local == currDist && x_local == x && y_local < y)) {
 					x = x_local;
 					y = y_local;
 					currDist = currDist_local;
@@ -372,7 +375,7 @@ int main(int argc, char *argv[]) {
 	} while(currDist < dst);
 
   printf("\nMinimal distance found %ld\n",dst);
-  printf("\nnumber of time hill climbed %d\n",count);
+  printf("\nnumber of time hill climbed %ld\n",count);
   // end1 = clock();
 	dtime = omp_get_wtime() - dtime;
   // printf("\ntime : %f\n",((double) (end1 - start1)) / CLOCKS_PER_SEC);
