@@ -328,7 +328,7 @@ int main(int argc, char *argv[]) {
 			int y_local;
 			long currDist_local = dst;
 
-			#pragma omp for
+			#pragma omp for schedule(dynamic, 1)
 			for(int i=0; i<cities-1; i++) {
 				for(int j=i+1; j<cities; j++) {
 					long newDist = dst;
